@@ -1,439 +1,330 @@
-import React, { useRef, useEffect, useState, useMemo } from "react";
-import Webcam from "react-webcam";
-import "@tensorflow/tfjs-backend-webgl";
-import * as faceLandmarksDetection from "@tensorflow-models/face-landmarks-detection";
+import React, { useState, useEffect } from "react";
+import Map, { Marker, Popup, Source, Layer } from "react-map-gl";
+import "mapbox-gl/dist/mapbox-gl.css";
+import mbxDirections from "@mapbox/mapbox-sdk/services/directions";
 
-const videoDims = { width: 640, height: 480 };
+const MAPBOX_TOKEN =
+  "pk.eyJ1IjoiY2hhcmxlczI5ZyIsImEiOiJjbWNrYWVzYmUwYzY4MmpweGcwZDN0c25iIn0.JJ7mcLEqZchHFAV5XY776A";
 
-export default function FaceFilterApp() {
-  const webcamRef = useRef(null);
-  const carouselRef = useRef(null);
+const directionsClient = mbxDirections({ accessToken: MAPBOX_TOKEN });
 
-  const [model, setModel] = useState(null);
-  const [faces, setFaces] = useState([]);
-  const [selectedFilterId, setSelectedFilterId] = useState("all-0");
-  const [loadingProgress, setLoadingProgress] = useState(0);
-  const [customFilters, setCustomFilters] = useState([]);
-
-  const baseFilters = [
-    { value: "all", label: "All", image: "/all-filter.png", category: "all" },
-    { value: "hat", label: "Hat Only", image: "/hat.png", category: "head" },
-
+export default function IntramurosMapboxApp() {
+  const [pins, setPins] = useState([
     {
-      value: "shades",
-      label: "Shades Only",
-      image: "/shades.png",
-      category: "eyes",
+      latitude: 14.5896,
+      longitude: 120.9747,
+      title: "Welcome to Intramuros!",
+      mediaType: "image",
+      mediaUrl:
+        "https://cdn.pixabay.com/photo/2015/04/23/22/00/tree-736885_960_720.jpg",
     },
-    {
-      value: "shades2",
-      label: "Shades 2 Only",
-      image: "/shades2.png",
-      category: "eyes",
-    },
-    {
-      value: "eyes",
-      label: "Eye Color",
-      image: "/eye-color.png",
-      category: "eyes",
-    },
-    {
-      value: "border",
-      label: "Border Only",
-      image: "/border.png",
-      category: "frame",
-    },
-  ];
+  ]);
 
-  const filterData = useMemo(
-    () => [...baseFilters, ...customFilters],
-    [customFilters]
-  );
-
-  const repeatedFilters = useMemo(
-    () =>
-      Array(20)
-        .fill(filterData)
-        .flat()
-        .map((filter, index) => ({
-          ...filter,
-          id: `${filter.value}-${index}`,
-        })),
-    [filterData]
-  );
-
-  const [newFilter, setNewFilter] = useState({
-    value: "",
-    label: "",
-    image: "",
-    category: "eyes",
+  const [viewState, setViewState] = useState({
+    latitude: 14.5896,
+    longitude: 120.9747,
+    zoom: 16,
   });
 
-  const selectedFilterMeta = repeatedFilters.find(
-    (f) => f.id === selectedFilterId
-  );
-  const selectedFilter = selectedFilterMeta?.value || "all";
+  const [userLocation, setUserLocation] = useState(null);
+  const [selectedPin, setSelectedPin] = useState(null);
+  const [selectedDistance, setSelectedDistance] = useState(null); // ✅ NEW
+  const [editingIndex, setEditingIndex] = useState(null);
+  const [formData, setFormData] = useState({
+    title: "",
+    mediaUrl: "",
+    mediaType: "image",
+  });
 
+  const [routeGeoJSON, setRouteGeoJSON] = useState(null);
+  const [routeDistance, setRouteDistance] = useState(null);
+
+  // 🛰️ Track user's location in real-time
   useEffect(() => {
-    let progress = 0;
-    const interval = setInterval(() => {
-      progress += Math.random() * 20;
-      if (progress >= 100) progress = 100;
-      setLoadingProgress(Math.round(progress));
-    }, 200);
+    const watchId = navigator.geolocation.watchPosition(
+      (pos) => {
+        const { latitude, longitude } = pos.coords;
+        setUserLocation({ latitude, longitude });
+        setViewState((prev) => ({
+          ...prev,
+          latitude,
+          longitude,
+        }));
+      },
+      (err) => console.error("GPS error:", err),
+      { enableHighAccuracy: true, maximumAge: 0, timeout: 5000 }
+    );
 
-    async function loadModel() {
-      try {
-        const detector = await faceLandmarksDetection.createDetector(
-          faceLandmarksDetection.SupportedModels.MediaPipeFaceMesh,
-          { runtime: "tfjs", maxFaces: 10 }
-        );
-        setModel(detector);
-        setLoadingProgress(100);
-      } catch (error) {
-        console.error("Error loading model:", error);
-      }
-
-      clearInterval(interval);
-    }
-
-    loadModel();
+    return () => navigator.geolocation.clearWatch(watchId);
   }, []);
 
+  // 🧭 Route from user to all pins
   useEffect(() => {
-    let rafId;
-    async function detect() {
-      if (model && webcamRef.current?.video?.readyState === 4) {
-        const video = webcamRef.current.video;
-        try {
-          const predictions = await model.estimateFaces(video);
-          setFaces(predictions);
-        } catch (error) {
-          console.error("Error detecting faces:", error);
-        }
-      }
-      rafId = requestAnimationFrame(detect);
-    }
-    detect();
-    return () => cancelAnimationFrame(rafId);
-  }, [model]);
+    if (!userLocation || pins.length < 1) return;
 
-  useEffect(() => {
-    const carousel = carouselRef.current;
-    if (!carousel) return;
-    const middleIndex = Math.floor(repeatedFilters.length / 2);
-    const button = carousel.children[middleIndex];
+    const coordinates = [
+      [userLocation.longitude, userLocation.latitude],
+      ...pins.map((pin) => [pin.longitude, pin.latitude]),
+    ];
 
-    if (button) {
-      const scrollLeft =
-        button.offsetLeft - (carousel.offsetWidth - button.offsetWidth) / 2;
-      carousel.scrollTo({ left: scrollLeft, behavior: "smooth" });
-      setSelectedFilterId(repeatedFilters[middleIndex].id);
-    }
-  }, [repeatedFilters]);
+    directionsClient
+      .getDirections({
+        profile: "walking",
+        geometries: "geojson",
+        waypoints: coordinates.map((coord) => ({
+          coordinates: coord,
+        })),
+      })
+      .send()
+      .then((res) => {
+        const route = res.body.routes[0];
+        setRouteGeoJSON(route.geometry);
+        setRouteDistance(route.distance);
+      })
+      .catch((err) => console.error("Route error:", err));
+  }, [userLocation, pins]);
 
-  useEffect(() => {
-    const carousel = carouselRef.current;
-    if (!carousel) return;
-    let timeoutId;
-    const handleScroll = () => {
-      clearTimeout(timeoutId);
-      timeoutId = setTimeout(() => {
-        const scrollLeft = carousel.scrollLeft;
-        const centerX = scrollLeft + carousel.offsetWidth / 2;
-        let closestId = null;
-        let minDist = Infinity;
-        Array.from(carousel.children).forEach((btn, i) => {
-          const btnCenter = btn.offsetLeft + btn.offsetWidth / 2;
-          const dist = Math.abs(centerX - btnCenter);
-          if (dist < minDist) {
-            minDist = dist;
-            closestId = repeatedFilters[i].id;
-          }
-        });
-        if (closestId && closestId !== selectedFilterId) {
-          setSelectedFilterId(closestId);
-        }
-        const closestButton =
-          carousel.children[
-            repeatedFilters.findIndex((f) => f.id === closestId)
-          ];
-        if (closestButton) {
-          const scrollLeft =
-            closestButton.offsetLeft -
-            (carousel.offsetWidth - closestButton.offsetWidth) / 2;
-          carousel.scrollTo({ left: scrollLeft, behavior: "smooth" });
-        }
-      }, 150);
+  const handleMapClick = (event) => {
+    const { lng, lat } = event.lngLat;
+    const newPin = {
+      latitude: lat,
+      longitude: lng,
+      title: "New Location",
+      mediaUrl: "https://samplelib.com/lib/preview/mp4/sample-5s.mp4",
+      mediaType: "video",
     };
-
-    carousel.addEventListener("scroll", handleScroll);
-    return () => {
-      clearTimeout(timeoutId);
-      carousel.removeEventListener("scroll", handleScroll);
-    };
-  }, [repeatedFilters, selectedFilterId]);
-
-  const overlays = faces.map((face, idx) => {
-    const lm = face?.keypoints;
-    if (!lm || lm.length < 264) return null;
-    const [lx, ly] = [lm[33].x, lm[33].y];
-    const [rx, ry] = [lm[263].x, lm[263].y];
-    const angle = (Math.atan2(ry - ly, rx - lx) * 180) / Math.PI;
-    const glassesW = Math.hypot(rx - lx, ry - ly) * 1.8;
-    const glassesH = glassesW / 2;
-    const glassesX = lx + (rx - lx) / 2 - glassesW / 2;
-    const glassesY = ly - glassesH / 3;
-    const hatW = glassesW * 1.6;
-    const hatH = hatW * 0.8;
-    const hatX = glassesX - glassesW * 0.28;
-    const hatY = glassesY - hatH * 0.8;
-
-    const getFilterImage = (category) => {
-      if (
-        selectedFilter === "all" ||
-        selectedFilterMeta?.category === category
-      ) {
-        return selectedFilterMeta?.image;
-      }
-      return null;
-    };
-
-    return (
-      <React.Fragment key={idx}>
-        {getFilterImage("head") && (
-          <img
-            src={getFilterImage("head")}
-            alt="head filter"
-            style={{
-              position: "absolute",
-              left: `${hatX}px`,
-              top: `${hatY}px`,
-              width: `${hatW}px`,
-              height: `${hatH}px`,
-              transform: `rotate(${angle}deg)`,
-              transformOrigin: "bottom center",
-              pointerEvents: "none",
-            }}
-          />
-        )}
-        {getFilterImage("eyes") && (
-          <img
-            src={getFilterImage("eyes")}
-            alt="eyes filter"
-            style={{
-              position: "absolute",
-              left: `${glassesX}px`,
-              top: `${glassesY}px`,
-              width: `${glassesW}px`,
-              height: `${glassesH}px`,
-              transform: `rotate(${angle}deg)`,
-              transformOrigin: "center",
-              pointerEvents: "none",
-            }}
-          />
-        )}
-        {getFilterImage("frame") && (
-          <img
-            src={getFilterImage("frame")}
-            alt="frame filter"
-            style={{
-              position: "absolute",
-              top: 0,
-              left: 0,
-              width: `${videoDims.width}px`,
-              height: `${videoDims.height}px`,
-              pointerEvents: "none",
-              zIndex: 5,
-            }}
-          />
-        )}
-      </React.Fragment>
-    );
-  });
-
-  const handleAddFilter = (e) => {
-    e.preventDefault();
-    if (!newFilter.value || !newFilter.image) return;
-    setCustomFilters((prev) => [...prev, { ...newFilter }]);
-    setNewFilter({ value: "", label: "", image: "", category: "eyes" });
+    setPins((prev) => [...prev, newPin]);
   };
 
-  return (
-    <div style={{ fontFamily: "sans-serif", paddingBottom: "100px" }}>
-      <div
-        style={{
-          position: "relative",
-          width: videoDims.width,
-          height: videoDims.height,
-          margin: "auto",
-          backgroundColor: "#000",
-        }}
-      >
-        <Webcam
-          ref={webcamRef}
-          audio={false}
-          width={videoDims.width}
-          height={videoDims.height}
-          style={{ position: "absolute", left: 0, top: 0 }}
-        />
-        {overlays}
-        {!model && (
-          <div
-            style={{
-              position: "absolute",
-              top: 0,
-              left: 0,
-              width: "100%",
-              height: "100%",
-              backgroundColor: "rgba(0, 0, 0, 0.5)",
-              color: "#fff",
-              display: "flex",
-              justifyContent: "center",
-              alignItems: "center",
-              flexDirection: "column",
-              zIndex: 10,
-            }}
-          >
-            <div
-              style={{
-                width: "50px",
-                height: "50px",
-                border: "5px solid #fff",
-                borderTop: "5px solid #3498db",
-                borderRadius: "50%",
-                animation: "spin 1s linear infinite",
-              }}
-            />
-            <span style={{ marginTop: "10px" }}>{loadingProgress}%</span>
-          </div>
+  const handleEditPin = (index) => {
+    const pin = pins[index];
+    setEditingIndex(index);
+    setFormData({
+      title: pin.title,
+      mediaUrl: pin.mediaUrl,
+      mediaType: pin.mediaType,
+    });
+  };
+
+  const savePinChanges = () => {
+    const updatedPins = [...pins];
+    updatedPins[editingIndex] = { ...updatedPins[editingIndex], ...formData };
+    setPins(updatedPins);
+    setEditingIndex(null);
+  };
+
+  const deletePin = () => {
+    const updatedPins = pins.filter((_, i) => i !== editingIndex);
+    setPins(updatedPins);
+    setEditingIndex(null);
+  };
+
+  const renderPopup = (pin) => (
+    <Popup
+      latitude={pin.latitude}
+      longitude={pin.longitude}
+      anchor="top"
+      closeOnClick={false}
+      onClose={() => {
+        setSelectedPin(null);
+        setSelectedDistance(null);
+      }}
+    >
+      <div style={{ maxWidth: 250 }}>
+        <h4>{pin.title}</h4>
+        {selectedDistance !== null && (
+          <p>🛣️ Distance: {(selectedDistance / 1000).toFixed(2)} km</p>
+        )}
+        {pin.mediaType === "image" ? (
+          <img src={pin.mediaUrl} alt="media" style={{ width: "100%" }} />
+        ) : (
+          <video src={pin.mediaUrl} controls width="100%" />
         )}
       </div>
+    </Popup>
+  );
 
-      <div
-        ref={carouselRef}
-        style={{
-          marginTop: "10px",
-          width: videoDims.width,
-          overflowX: "scroll",
-          display: "flex",
-          padding: "10px 0",
-          scrollSnapType: "x mandatory",
-          scrollBehavior: "smooth",
-          scrollbarWidth: "none",
+  return (
+    <div style={{ padding: "1rem" }}>
+      <h2>User Map with Directions</h2>
+
+      <Map
+        initialViewState={viewState}
+        mapboxAccessToken={MAPBOX_TOKEN}
+        onMove={(evt) => setViewState(evt.viewState)}
+        mapStyle="mapbox://styles/mapbox/streets-v11"
+        style={{ width: "1000px", height: "600px" }}
+        onClick={() => {
+          setSelectedPin(null);
+          setSelectedDistance(null);
         }}
       >
-        {repeatedFilters.map((filter) => (
-          <button
-            key={filter.id}
-            style={{
-              flex: "0 0 auto",
-              width: "70px",
-              height: "70px",
-              margin: "0 10px",
-              borderRadius: "50%",
-              background: `url(${filter.image}) center/cover no-repeat`,
-              border:
-                filter.id === selectedFilterId
-                  ? "3px solid #3498db"
-                  : "2px solid #ccc",
-              scrollSnapAlign: "center",
-              position: "relative",
-              cursor: "pointer",
-            }}
-            onClick={() => {
-              setSelectedFilterId(filter.id);
-              const button =
-                carouselRef.current.children[
-                  repeatedFilters.findIndex((f) => f.id === filter.id)
-                ];
-              const scrollLeft =
-                button.offsetLeft -
-                (carouselRef.current.offsetWidth - button.offsetWidth) / 2;
-              carouselRef.current.scrollTo({
-                left: scrollLeft,
-                behavior: "smooth",
-              });
-            }}
-            title={filter.label}
+        {userLocation && (
+          <Marker
+            latitude={userLocation.latitude}
+            longitude={userLocation.longitude}
+            anchor="bottom"
           >
-            <span
-              style={{
-                position: "absolute",
-                bottom: "5px",
-                left: "50%",
-                transform: "translateX(-50%)",
-                fontSize: "10px",
-                color: "#fff",
-                background: "rgba(0,0,0,0.5)",
-                padding: "2px 5px",
-                borderRadius: "4px",
+            <div style={{ fontSize: "24px", color: "red" }}>🧍</div>
+          </Marker>
+        )}
+
+        {pins.map((pin, index) => (
+          <Marker
+            key={index}
+            latitude={pin.latitude}
+            longitude={pin.longitude}
+            anchor="bottom"
+          >
+            <div
+              onClick={(e) => {
+                e.stopPropagation();
+                setSelectedPin(index);
+                setSelectedDistance(null);
+
+                // 🧮 Calculate single distance
+                if (userLocation) {
+                  directionsClient
+                    .getDirections({
+                      profile: "walking",
+                      geometries: "geojson",
+                      waypoints: [
+                        {
+                          coordinates: [
+                            userLocation.longitude,
+                            userLocation.latitude,
+                          ],
+                        },
+                        {
+                          coordinates: [pin.longitude, pin.latitude],
+                        },
+                      ],
+                    })
+                    .send()
+                    .then((res) => {
+                      const distance = res.body.routes[0].distance;
+                      setSelectedDistance(distance);
+                    })
+                    .catch((err) => console.error("Single route error:", err));
+                }
               }}
+              style={{ fontSize: "24px", cursor: "pointer" }}
             >
-              {filter.label}
-            </span>
-          </button>
+              📍
+            </div>
+          </Marker>
         ))}
-      </div>
 
-      <form
-        onSubmit={handleAddFilter}
-        style={{
-          maxWidth: "640px",
-          margin: "20px auto",
-          display: "flex",
-          flexDirection: "column",
-          gap: "10px",
-        }}
+        {selectedPin !== null && renderPopup(pins[selectedPin])}
+
+        {routeGeoJSON && (
+          <Source id="route" type="geojson" data={routeGeoJSON}>
+            <Layer
+              id="route-layer"
+              type="line"
+              paint={{
+                "line-color": "#007cbf",
+                "line-width": 5,
+              }}
+            />
+          </Source>
+        )}
+      </Map>
+
+      {routeDistance && (
+        <p style={{ fontSize: "18px", marginTop: "10px" }}>
+          📍 Full Route Distance: {(routeDistance / 1000).toFixed(2)} km
+        </p>
+      )}
+
+      <h2>Admin Map</h2>
+
+      <Map
+        initialViewState={viewState}
+        mapboxAccessToken={MAPBOX_TOKEN}
+        onMove={(evt) => setViewState(evt.viewState)}
+        onClick={handleMapClick}
+        mapStyle="mapbox://styles/mapbox/streets-v11"
+        style={{ width: "100%", height: "500px", marginTop: "1rem" }}
       >
-        <input
-          type="text"
-          placeholder="Filter Value (unique)"
-          value={newFilter.value}
-          onChange={(e) =>
-            setNewFilter({ ...newFilter, value: e.target.value })
-          }
-        />
-        <input
-          type="text"
-          placeholder="Label"
-          value={newFilter.label}
-          onChange={(e) =>
-            setNewFilter({ ...newFilter, label: e.target.value })
-          }
-        />
-        <input
-          type="text"
-          placeholder="Image URL"
-          value={newFilter.image}
-          onChange={(e) =>
-            setNewFilter({ ...newFilter, image: e.target.value })
-          }
-        />
-        <select
-          value={newFilter.category}
-          onChange={(e) =>
-            setNewFilter({ ...newFilter, category: e.target.value })
-          }
-        >
-          <option value="eyes">Eyes</option>
-          <option value="head">Head</option>
-          <option value="lips">Lips</option>
-          <option value="face">Full Face</option>
-          <option value="frame">Frame</option>
-        </select>
-        <button type="submit">Add Filter</button>
-      </form>
+        {pins.map((pin, index) => (
+          <Marker
+            key={index}
+            latitude={pin.latitude}
+            longitude={pin.longitude}
+            anchor="bottom"
+          >
+            <div
+              onClick={(e) => {
+                e.stopPropagation();
+                handleEditPin(index);
+              }}
+              style={{ fontSize: "24px", cursor: "pointer", color: "blue" }}
+            >
+              🛠️
+            </div>
+          </Marker>
+        ))}
+      </Map>
 
-      <style>{`
-        @keyframes spin {
-          0% { transform: rotate(0deg); }
-          100% { transform: rotate(360deg); }
-        }
-        div::-webkit-scrollbar {
-          display: none;
-        }
-      `}</style>
+      {editingIndex !== null && (
+        <div
+          style={{
+            marginTop: "1rem",
+            padding: "1rem",
+            border: "1px solid #ccc",
+            borderRadius: "8px",
+            maxWidth: "400px",
+            background: "#fefefe",
+          }}
+        >
+          <h3>Edit Pin</h3>
+          <label>
+            Title:
+            <input
+              type="text"
+              value={formData.title}
+              onChange={(e) =>
+                setFormData({ ...formData, title: e.target.value })
+              }
+              style={{ width: "100%", marginBottom: "0.5rem" }}
+            />
+          </label>
+          <label>
+            Media URL:
+            <input
+              type="text"
+              value={formData.mediaUrl}
+              onChange={(e) =>
+                setFormData({ ...formData, mediaUrl: e.target.value })
+              }
+              style={{ width: "100%", marginBottom: "0.5rem" }}
+            />
+          </label>
+          <label>
+            Media Type:
+            <select
+              value={formData.mediaType}
+              onChange={(e) =>
+                setFormData({ ...formData, mediaType: e.target.value })
+              }
+              style={{ width: "100%", marginBottom: "0.5rem" }}
+            >
+              <option value="image">Image</option>
+              <option value="video">Video</option>
+            </select>
+          </label>
+          <div style={{ marginTop: "0.5rem" }}>
+            <button onClick={savePinChanges}>💾 Save Changes</button>
+            <button
+              onClick={deletePin}
+              style={{ marginLeft: "1rem", color: "red" }}
+            >
+              🗑️ Delete
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
