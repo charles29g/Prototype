@@ -53,21 +53,25 @@ export default function IntramurosMapboxApp() {
   }, []);
 
   useEffect(() => {
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        (pos) => {
-          const { latitude, longitude } = pos.coords;
-          setUserLocation({ latitude, longitude });
-          setViewState((prev) => ({
-            ...prev,
-            latitude,
-            longitude,
-          }));
-        },
-        (err) => console.error("Initial GPS error:", err),
-        { enableHighAccuracy: true }
-      );
-    }
+    const requestLocation = () => {
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+          (pos) => {
+            const { latitude, longitude } = pos.coords;
+            setUserLocation({ latitude, longitude });
+            setViewState((prev) => ({
+              ...prev,
+              latitude,
+              longitude,
+            }));
+          },
+          (err) => console.error("Initial GPS error:", err),
+          { enableHighAccuracy: true }
+        );
+      }
+    };
+
+    requestLocation();
 
     const watchId = navigator.geolocation.watchPosition(
       (pos) => {
@@ -154,6 +158,7 @@ export default function IntramurosMapboxApp() {
       if (typeof DeviceOrientationEvent?.requestPermission === "function") {
         await DeviceOrientationEvent.requestPermission();
       }
+      await navigator.mediaDevices.getUserMedia({ video: true });
     } catch (error) {
       console.error("AR permission error:", error);
     }
@@ -206,10 +211,6 @@ export default function IntramurosMapboxApp() {
       </div>
     </Popup>
   );
-
-  // Remainder of the code (unchanged) ...
-
-  // Remainder of the code (unchanged) ...
 
   return (
     <div style={{ padding: "1rem", position: "relative" }}>
