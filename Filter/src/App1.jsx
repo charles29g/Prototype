@@ -209,6 +209,8 @@ export default function IntramurosMapboxApp() {
 
   // Remainder of the code (unchanged) ...
 
+  // Remainder of the code (unchanged) ...
+
   return (
     <div style={{ padding: "1rem", position: "relative" }}>
       <h2>User Map with Directions</h2>
