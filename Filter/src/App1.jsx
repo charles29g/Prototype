@@ -39,20 +39,9 @@ export default function IntramurosMapboxApp() {
   const [routeGeoJSON, setRouteGeoJSON] = useState(null);
   const [routeDistance, setRouteDistance] = useState(null);
 
-  const [arUrl, setArUrl] = useState(null); // ✅ For embedded AR iframe
+  const [showARModal, setShowARModal] = useState(false); // For Arloopa modal
 
-  useEffect(() => {
-    const existingScript = document.querySelector(
-      'script[src="//cdn.8thwall.com/web/share/embed8.js"]'
-    );
-    if (!existingScript) {
-      const script = document.createElement("script");
-      script.src = "//cdn.8thwall.com/web/share/embed8.js";
-      script.async = true;
-      document.body.appendChild(script);
-    }
-  }, []);
-
+  // Track user location
   useEffect(() => {
     const watchId = navigator.geolocation.watchPosition(
       (pos) => {
@@ -83,9 +72,7 @@ export default function IntramurosMapboxApp() {
       .getDirections({
         profile: "walking",
         geometries: "geojson",
-        waypoints: coordinates.map((coord) => ({
-          coordinates: coord,
-        })),
+        waypoints: coordinates.map((coord) => ({ coordinates: coord })),
       })
       .send()
       .then((res) => {
@@ -153,12 +140,10 @@ export default function IntramurosMapboxApp() {
           <video src={pin.mediaUrl} controls width="100%" />
         )}
 
-        {/* ✅ View in AR - Open iFrame Instead of New Tab */}
+        {/* ✅ AR Button (launches modal with Arloopa iframe) */}
         <div style={{ marginTop: "1rem", textAlign: "center" }}>
           <button
-            onClick={() =>
-              setArUrl("https://aaronjoshuabagain.8thwall.app/ust-building/")
-            }
+            onClick={() => setShowARModal(true)}
             style={{
               backgroundColor: "#2a6df5",
               color: "white",
@@ -268,43 +253,6 @@ export default function IntramurosMapboxApp() {
         </p>
       )}
 
-      {arUrl && (
-        <div style={{ marginTop: "1rem" }}>
-          <h3>Augmented Reality View</h3>
-          <div
-            style={{ position: "relative", paddingBottom: "56.25%", height: 0 }}
-          >
-            <iframe
-              src={arUrl}
-              title="AR View"
-              allow="camera; fullscreen; xr-spatial-tracking"
-              style={{
-                position: "absolute",
-                top: 0,
-                left: 0,
-                width: "100%",
-                height: "100%",
-                border: "none",
-              }}
-            ></iframe>
-          </div>
-          <button
-            onClick={() => setArUrl(null)}
-            style={{
-              marginTop: "0.5rem",
-              padding: "6px 12px",
-              background: "#f44336",
-              color: "#fff",
-              border: "none",
-              borderRadius: "4px",
-              cursor: "pointer",
-            }}
-          >
-            ❌ Close AR View
-          </button>
-        </div>
-      )}
-
       <h2>Admin Map</h2>
 
       <Map
@@ -391,6 +339,49 @@ export default function IntramurosMapboxApp() {
               🗑️ Delete
             </button>
           </div>
+        </div>
+      )}
+
+      {/* ✅ Arloopa Modal with iframe */}
+      {showARModal && (
+        <div
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            width: "100vw",
+            height: "100vh",
+            backgroundColor: "rgba(0, 0, 0, 0.95)",
+            zIndex: 9999,
+            display: "flex",
+            flexDirection: "column",
+          }}
+        >
+          <button
+            onClick={() => setShowARModal(false)}
+            style={{
+              alignSelf: "flex-end",
+              margin: "10px",
+              background: "red",
+              color: "white",
+              border: "none",
+              padding: "10px 16px",
+              borderRadius: "6px",
+              cursor: "pointer",
+              zIndex: 99999,
+            }}
+          >
+            ❌ Close AR
+          </button>
+
+          <iframe
+            title="Marker-based AR"
+            src="https://webar.arloopa.com/marker_based/?experience_id=686546214e7f8892fff79f92"
+            width="100%"
+            height="100%"
+            allow="camera; microphone; fullscreen; vr; xr; accelerometer; magnetometer; gyroscope"
+            style={{ border: "none", flexGrow: 1 }}
+          />
         </div>
       )}
     </div>
