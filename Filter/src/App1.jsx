@@ -28,51 +28,19 @@ export default function IntramurosMapboxApp() {
 
   const [userLocation, setUserLocation] = useState(null);
   const [selectedPin, setSelectedPin] = useState(null);
-  const [selectedDistance, setSelectedDistance] = useState(null);
+  const [selectedDistance, setSelectedDistance] = useState(null); // ✅ NEW
   const [editingIndex, setEditingIndex] = useState(null);
   const [formData, setFormData] = useState({
     title: "",
     mediaUrl: "",
     mediaType: "image",
   });
+
   const [routeGeoJSON, setRouteGeoJSON] = useState(null);
   const [routeDistance, setRouteDistance] = useState(null);
-  const [showARFrame, setShowARFrame] = useState(false);
-  const [activeARUrl, setActiveARUrl] = useState("");
 
+  // 🛰️ Track user's location in real-time
   useEffect(() => {
-    const existingScript = document.querySelector(
-      'script[src="//cdn.8thwall.com/web/share/embed8.js"]'
-    );
-    if (!existingScript) {
-      const script = document.createElement("script");
-      script.src = "//cdn.8thwall.com/web/share/embed8.js";
-      script.async = true;
-      document.body.appendChild(script);
-    }
-  }, []);
-
-  useEffect(() => {
-    const requestLocation = () => {
-      if (navigator.geolocation) {
-        navigator.geolocation.getCurrentPosition(
-          (pos) => {
-            const { latitude, longitude } = pos.coords;
-            setUserLocation({ latitude, longitude });
-            setViewState((prev) => ({
-              ...prev,
-              latitude,
-              longitude,
-            }));
-          },
-          (err) => console.error("Initial GPS error:", err),
-          { enableHighAccuracy: true }
-        );
-      }
-    };
-
-    requestLocation();
-
     const watchId = navigator.geolocation.watchPosition(
       (pos) => {
         const { latitude, longitude } = pos.coords;
@@ -90,6 +58,7 @@ export default function IntramurosMapboxApp() {
     return () => navigator.geolocation.clearWatch(watchId);
   }, []);
 
+  // 🧭 Route from user to all pins
   useEffect(() => {
     if (!userLocation || pins.length < 1) return;
 
@@ -150,20 +119,6 @@ export default function IntramurosMapboxApp() {
     setEditingIndex(null);
   };
 
-  const requestARPermissions = async () => {
-    try {
-      if (typeof DeviceMotionEvent?.requestPermission === "function") {
-        await DeviceMotionEvent.requestPermission();
-      }
-      if (typeof DeviceOrientationEvent?.requestPermission === "function") {
-        await DeviceOrientationEvent.requestPermission();
-      }
-      await navigator.mediaDevices.getUserMedia({ video: true });
-    } catch (error) {
-      console.error("AR permission error:", error);
-    }
-  };
-
   const renderPopup = (pin) => (
     <Popup
       latitude={pin.latitude}
@@ -185,170 +140,96 @@ export default function IntramurosMapboxApp() {
         ) : (
           <video src={pin.mediaUrl} controls width="100%" />
         )}
-
-        <div style={{ marginTop: "1rem", textAlign: "center" }}>
-          <button
-            onClick={async () => {
-              await requestARPermissions();
-              setShowARFrame(true);
-              setActiveARUrl(
-                "https://aaronjoshuabagain.8thwall.app/ust-building/"
-              );
-            }}
-            style={{
-              backgroundColor: "#2a6df5",
-              color: "white",
-              border: "none",
-              padding: "10px 16px",
-              borderRadius: "6px",
-              cursor: "pointer",
-              marginTop: "8px",
-            }}
-          >
-            👓 View in AR
-          </button>
-        </div>
       </div>
     </Popup>
   );
 
   return (
-    <div style={{ padding: "1rem", position: "relative" }}>
+    <div style={{ padding: "1rem" }}>
       <h2>User Map with Directions</h2>
 
-      <div style={{ position: "relative" }}>
-        <Map
-          initialViewState={viewState}
-          mapboxAccessToken={MAPBOX_TOKEN}
-          onMove={(evt) => setViewState(evt.viewState)}
-          mapStyle="mapbox://styles/mapbox/streets-v11"
-          style={{ width: "1000px", height: "600px" }}
-          onClick={() => {
-            setSelectedPin(null);
-            setSelectedDistance(null);
-          }}
-        >
-          {userLocation && (
-            <Marker
-              latitude={userLocation.latitude}
-              longitude={userLocation.longitude}
-              anchor="bottom"
-            >
-              <div style={{ fontSize: "24px", color: "red" }}>🧍</div>
-            </Marker>
-          )}
-
-          {pins.map((pin, index) => (
-            <Marker
-              key={index}
-              latitude={pin.latitude}
-              longitude={pin.longitude}
-              anchor="bottom"
-            >
-              <div
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setSelectedPin(index);
-                  setSelectedDistance(null);
-
-                  if (userLocation) {
-                    directionsClient
-                      .getDirections({
-                        profile: "walking",
-                        geometries: "geojson",
-                        waypoints: [
-                          {
-                            coordinates: [
-                              userLocation.longitude,
-                              userLocation.latitude,
-                            ],
-                          },
-                          {
-                            coordinates: [pin.longitude, pin.latitude],
-                          },
-                        ],
-                      })
-                      .send()
-                      .then((res) => {
-                        const distance = res.body.routes[0].distance;
-                        setSelectedDistance(distance);
-                      })
-                      .catch((err) =>
-                        console.error("Single route error:", err)
-                      );
-                  }
-                }}
-                style={{ fontSize: "24px", cursor: "pointer" }}
-              >
-                📍
-              </div>
-            </Marker>
-          ))}
-
-          {selectedPin !== null && renderPopup(pins[selectedPin])}
-
-          {routeGeoJSON && (
-            <Source id="route" type="geojson" data={routeGeoJSON}>
-              <Layer
-                id="route-layer"
-                type="line"
-                paint={{
-                  "line-color": "#007cbf",
-                  "line-width": 5,
-                }}
-              />
-            </Source>
-          )}
-        </Map>
-
-        {showARFrame && activeARUrl && (
-          <div
-            style={{
-              position: "absolute",
-              top: 0,
-              left: 0,
-              width: "1000px",
-              height: "600px",
-              backgroundColor: "rgba(255, 255, 255, 0.95)",
-              zIndex: 10,
-              display: "flex",
-              flexDirection: "column",
-              alignItems: "center",
-              justifyContent: "center",
-            }}
+      <Map
+        initialViewState={viewState}
+        mapboxAccessToken={MAPBOX_TOKEN}
+        onMove={(evt) => setViewState(evt.viewState)}
+        mapStyle="mapbox://styles/mapbox/streets-v11"
+        style={{ width: "1000px", height: "600px" }}
+        onClick={() => {
+          setSelectedPin(null);
+          setSelectedDistance(null);
+        }}
+      >
+        {userLocation && (
+          <Marker
+            latitude={userLocation.latitude}
+            longitude={userLocation.longitude}
+            anchor="bottom"
           >
-            <h3>🕶️ AR View</h3>
-            <iframe
-              title="AR Viewer"
-              src={activeARUrl}
-              allow="camera; gyroscope; accelerometer"
-              style={{
-                width: "90%",
-                height: "80%",
-                border: "2px solid #2a6df5",
-                borderRadius: "10px",
-              }}
-            ></iframe>
-            <button
-              onClick={() => {
-                setShowARFrame(false);
-                setActiveARUrl("");
-              }}
-              style={{
-                marginTop: "10px",
-                padding: "8px 12px",
-                backgroundColor: "#f44336",
-                color: "white",
-                border: "none",
-                borderRadius: "6px",
-                cursor: "pointer",
-              }}
-            >
-              ❌ Close AR View
-            </button>
-          </div>
+            <div style={{ fontSize: "24px", color: "red" }}>🧍</div>
+          </Marker>
         )}
-      </div>
+
+        {pins.map((pin, index) => (
+          <Marker
+            key={index}
+            latitude={pin.latitude}
+            longitude={pin.longitude}
+            anchor="bottom"
+          >
+            <div
+              onClick={(e) => {
+                e.stopPropagation();
+                setSelectedPin(index);
+                setSelectedDistance(null);
+
+                // 🧮 Calculate single distance
+                if (userLocation) {
+                  directionsClient
+                    .getDirections({
+                      profile: "walking",
+                      geometries: "geojson",
+                      waypoints: [
+                        {
+                          coordinates: [
+                            userLocation.longitude,
+                            userLocation.latitude,
+                          ],
+                        },
+                        {
+                          coordinates: [pin.longitude, pin.latitude],
+                        },
+                      ],
+                    })
+                    .send()
+                    .then((res) => {
+                      const distance = res.body.routes[0].distance;
+                      setSelectedDistance(distance);
+                    })
+                    .catch((err) => console.error("Single route error:", err));
+                }
+              }}
+              style={{ fontSize: "24px", cursor: "pointer" }}
+            >
+              📍
+            </div>
+          </Marker>
+        ))}
+
+        {selectedPin !== null && renderPopup(pins[selectedPin])}
+
+        {routeGeoJSON && (
+          <Source id="route" type="geojson" data={routeGeoJSON}>
+            <Layer
+              id="route-layer"
+              type="line"
+              paint={{
+                "line-color": "#007cbf",
+                "line-width": 5,
+              }}
+            />
+          </Source>
+        )}
+      </Map>
 
       {routeDistance && (
         <p style={{ fontSize: "18px", marginTop: "10px" }}>
