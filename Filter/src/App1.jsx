@@ -53,6 +53,22 @@ export default function IntramurosMapboxApp() {
   }, []);
 
   useEffect(() => {
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          const { latitude, longitude } = pos.coords;
+          setUserLocation({ latitude, longitude });
+          setViewState((prev) => ({
+            ...prev,
+            latitude,
+            longitude,
+          }));
+        },
+        (err) => console.error("Initial GPS error:", err),
+        { enableHighAccuracy: true }
+      );
+    }
+
     const watchId = navigator.geolocation.watchPosition(
       (pos) => {
         const { latitude, longitude } = pos.coords;
@@ -130,6 +146,19 @@ export default function IntramurosMapboxApp() {
     setEditingIndex(null);
   };
 
+  const requestARPermissions = async () => {
+    try {
+      if (typeof DeviceMotionEvent?.requestPermission === "function") {
+        await DeviceMotionEvent.requestPermission();
+      }
+      if (typeof DeviceOrientationEvent?.requestPermission === "function") {
+        await DeviceOrientationEvent.requestPermission();
+      }
+    } catch (error) {
+      console.error("AR permission error:", error);
+    }
+  };
+
   const renderPopup = (pin) => (
     <Popup
       latitude={pin.latitude}
@@ -154,7 +183,8 @@ export default function IntramurosMapboxApp() {
 
         <div style={{ marginTop: "1rem", textAlign: "center" }}>
           <button
-            onClick={() => {
+            onClick={async () => {
+              await requestARPermissions();
               setShowARFrame(true);
               setActiveARUrl(
                 "https://aaronjoshuabagain.8thwall.app/ust-building/"
@@ -176,6 +206,8 @@ export default function IntramurosMapboxApp() {
       </div>
     </Popup>
   );
+
+  // Remainder of the code (unchanged) ...
 
   return (
     <div style={{ padding: "1rem", position: "relative" }}>
