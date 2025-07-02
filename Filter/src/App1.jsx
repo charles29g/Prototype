@@ -28,7 +28,7 @@ export default function IntramurosMapboxApp() {
 
   const [userLocation, setUserLocation] = useState(null);
   const [selectedPin, setSelectedPin] = useState(null);
-  const [selectedDistance, setSelectedDistance] = useState(null); // ✅ NEW
+  const [selectedDistance, setSelectedDistance] = useState(null);
   const [editingIndex, setEditingIndex] = useState(null);
   const [formData, setFormData] = useState({
     title: "",
@@ -38,7 +38,9 @@ export default function IntramurosMapboxApp() {
 
   const [routeGeoJSON, setRouteGeoJSON] = useState(null);
   const [routeDistance, setRouteDistance] = useState(null);
-  //8th Wall
+
+  const [arUrl, setArUrl] = useState(null); // ✅ For embedded AR iframe
+
   useEffect(() => {
     const existingScript = document.querySelector(
       'script[src="//cdn.8thwall.com/web/share/embed8.js"]'
@@ -51,7 +53,6 @@ export default function IntramurosMapboxApp() {
     }
   }, []);
 
-  // 🛰️ Track user's location in real-time
   useEffect(() => {
     const watchId = navigator.geolocation.watchPosition(
       (pos) => {
@@ -70,7 +71,6 @@ export default function IntramurosMapboxApp() {
     return () => navigator.geolocation.clearWatch(watchId);
   }, []);
 
-  // 🧭 Route from user to all pins
   useEffect(() => {
     if (!userLocation || pins.length < 1) return;
 
@@ -153,14 +153,11 @@ export default function IntramurosMapboxApp() {
           <video src={pin.mediaUrl} controls width="100%" />
         )}
 
-        {/* ✅ AR Button as <button> */}
+        {/* ✅ View in AR - Open iFrame Instead of New Tab */}
         <div style={{ marginTop: "1rem", textAlign: "center" }}>
           <button
             onClick={() =>
-              window.open(
-                "https://aaronjoshuabagain.8thwall.app/ust-building/",
-                "_blank"
-              )
+              setArUrl("https://aaronjoshuabagain.8thwall.app/ust-building/")
             }
             style={{
               backgroundColor: "#2a6df5",
@@ -217,7 +214,6 @@ export default function IntramurosMapboxApp() {
                 setSelectedPin(index);
                 setSelectedDistance(null);
 
-                // 🧮 Calculate single distance
                 if (userLocation) {
                   directionsClient
                     .getDirections({
@@ -270,6 +266,43 @@ export default function IntramurosMapboxApp() {
         <p style={{ fontSize: "18px", marginTop: "10px" }}>
           📍 Full Route Distance: {(routeDistance / 1000).toFixed(2)} km
         </p>
+      )}
+
+      {arUrl && (
+        <div style={{ marginTop: "1rem" }}>
+          <h3>Augmented Reality View</h3>
+          <div
+            style={{ position: "relative", paddingBottom: "56.25%", height: 0 }}
+          >
+            <iframe
+              src={arUrl}
+              title="AR View"
+              allow="camera; fullscreen; xr-spatial-tracking"
+              style={{
+                position: "absolute",
+                top: 0,
+                left: 0,
+                width: "100%",
+                height: "100%",
+                border: "none",
+              }}
+            ></iframe>
+          </div>
+          <button
+            onClick={() => setArUrl(null)}
+            style={{
+              marginTop: "0.5rem",
+              padding: "6px 12px",
+              background: "#f44336",
+              color: "#fff",
+              border: "none",
+              borderRadius: "4px",
+              cursor: "pointer",
+            }}
+          >
+            ❌ Close AR View
+          </button>
+        </div>
       )}
 
       <h2>Admin Map</h2>
