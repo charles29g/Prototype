@@ -28,7 +28,7 @@ export default function IntramurosMapboxApp() {
 
   const [userLocation, setUserLocation] = useState(null);
   const [selectedPin, setSelectedPin] = useState(null);
-  const [selectedDistance, setSelectedDistance] = useState(null);
+  const [selectedDistance, setSelectedDistance] = useState(null); // ✅ NEW
   const [editingIndex, setEditingIndex] = useState(null);
   const [formData, setFormData] = useState({
     title: "",
@@ -38,9 +38,22 @@ export default function IntramurosMapboxApp() {
 
   const [routeGeoJSON, setRouteGeoJSON] = useState(null);
   const [routeDistance, setRouteDistance] = useState(null);
+  //8th Wall
+  useEffect(() => {
+    const existingScript = document.querySelector(
+      'script[src="//cdn.8thwall.com/web/share/embed8.js"]'
+    );
+    if (!existingScript) {
+      const script = document.createElement("script");
+      script.src = "//cdn.8thwall.com/web/share/embed8.js";
+      script.async = true;
+      document.body.appendChild(script);
+    }
+  }, []);
 
-  const requestLocation = () => {
-    navigator.geolocation.watchPosition(
+  // 🛰️ Track user's location in real-time
+  useEffect(() => {
+    const watchId = navigator.geolocation.watchPosition(
       (pos) => {
         const { latitude, longitude } = pos.coords;
         setUserLocation({ latitude, longitude });
@@ -50,15 +63,14 @@ export default function IntramurosMapboxApp() {
           longitude,
         }));
       },
-      (err) => {
-        console.error("GPS error:", err);
-        alert("⚠️ Please allow location access in Safari Settings.");
-      },
+      (err) => console.error("GPS error:", err),
       { enableHighAccuracy: true, maximumAge: 0, timeout: 5000 }
     );
-  };
 
-  // Route from user to all pins
+    return () => navigator.geolocation.clearWatch(watchId);
+  }, []);
+
+  // 🧭 Route from user to all pins
   useEffect(() => {
     if (!userLocation || pins.length < 1) return;
 
@@ -140,6 +152,29 @@ export default function IntramurosMapboxApp() {
         ) : (
           <video src={pin.mediaUrl} controls width="100%" />
         )}
+
+        {/* ✅ AR Button as <button> */}
+        <div style={{ marginTop: "1rem", textAlign: "center" }}>
+          <button
+            onClick={() =>
+              window.open(
+                "https://aaronjoshuabagain.8thwall.app/ust-building/",
+                "_blank"
+              )
+            }
+            style={{
+              backgroundColor: "#2a6df5",
+              color: "white",
+              border: "none",
+              padding: "10px 16px",
+              borderRadius: "6px",
+              cursor: "pointer",
+              marginTop: "8px",
+            }}
+          >
+            👓 View in AR
+          </button>
+        </div>
       </div>
     </Popup>
   );
@@ -147,12 +182,6 @@ export default function IntramurosMapboxApp() {
   return (
     <div style={{ padding: "1rem" }}>
       <h2>User Map with Directions</h2>
-
-      {!userLocation && (
-        <button onClick={requestLocation} style={{ marginBottom: "1rem" }}>
-          📍 Enable Location
-        </button>
-      )}
 
       <Map
         initialViewState={viewState}
@@ -188,7 +217,7 @@ export default function IntramurosMapboxApp() {
                 setSelectedPin(index);
                 setSelectedDistance(null);
 
-                // Calculate single distance
+                // 🧮 Calculate single distance
                 if (userLocation) {
                   directionsClient
                     .getDirections({
