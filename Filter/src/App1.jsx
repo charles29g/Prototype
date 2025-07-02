@@ -28,7 +28,7 @@ export default function IntramurosMapboxApp() {
 
   const [userLocation, setUserLocation] = useState(null);
   const [selectedPin, setSelectedPin] = useState(null);
-  const [selectedDistance, setSelectedDistance] = useState(null); // ✅ NEW
+  const [selectedDistance, setSelectedDistance] = useState(null);
   const [editingIndex, setEditingIndex] = useState(null);
   const [formData, setFormData] = useState({
     title: "",
@@ -39,9 +39,8 @@ export default function IntramurosMapboxApp() {
   const [routeGeoJSON, setRouteGeoJSON] = useState(null);
   const [routeDistance, setRouteDistance] = useState(null);
 
-  // 🛰️ Track user's location in real-time
-  useEffect(() => {
-    const watchId = navigator.geolocation.watchPosition(
+  const requestLocation = () => {
+    navigator.geolocation.watchPosition(
       (pos) => {
         const { latitude, longitude } = pos.coords;
         setUserLocation({ latitude, longitude });
@@ -51,14 +50,15 @@ export default function IntramurosMapboxApp() {
           longitude,
         }));
       },
-      (err) => console.error("GPS error:", err),
+      (err) => {
+        console.error("GPS error:", err);
+        alert("⚠️ Please allow location access in Safari Settings.");
+      },
       { enableHighAccuracy: true, maximumAge: 0, timeout: 5000 }
     );
+  };
 
-    return () => navigator.geolocation.clearWatch(watchId);
-  }, []);
-
-  // 🧭 Route from user to all pins
+  // Route from user to all pins
   useEffect(() => {
     if (!userLocation || pins.length < 1) return;
 
@@ -148,6 +148,12 @@ export default function IntramurosMapboxApp() {
     <div style={{ padding: "1rem" }}>
       <h2>User Map with Directions</h2>
 
+      {!userLocation && (
+        <button onClick={requestLocation} style={{ marginBottom: "1rem" }}>
+          📍 Enable Location
+        </button>
+      )}
+
       <Map
         initialViewState={viewState}
         mapboxAccessToken={MAPBOX_TOKEN}
@@ -182,7 +188,7 @@ export default function IntramurosMapboxApp() {
                 setSelectedPin(index);
                 setSelectedDistance(null);
 
-                // 🧮 Calculate single distance
+                // Calculate single distance
                 if (userLocation) {
                   directionsClient
                     .getDirections({
